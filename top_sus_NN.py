@@ -13,12 +13,14 @@ RANDOM_SEED = 42
 tf.set_random_seed(RANDOM_SEED)
 
 class Topological_NN(object):
-    def __init__(self, dataF, h_nodes=20, epochs=1000, step_s=1e-4):
+    def __init__(self, dataF, h_nodes=20, epochs=1000, step_s=1e-4, reg_scale=1e-1):
         self.h_nodes = h_nodes
         self.epochs = epochs
         self.step_s = step_s
         self.dataF = dataF
         self.input_features = 16
+        
+        self.regularizer = tf.contrib.layers.l2_regularizer(scale=reg_scale)
 
         self.dir_name = path + '/MetaGraphs/'
         self.fileN = self.dir_name + 'Topological_jump__Hnodes_{:.0f}_Ssize_{:.0e}'.format(h_nodes, step_s)
@@ -40,7 +42,7 @@ class Topological_NN(object):
         yhat = tf.matmul(hid2, w_3)
         return yhat
 
-    def get_data(self, frac_test=0.4):
+    def get_data(self, frac_test=0.3):
         self.scalar = StandardScaler()
         
         data_file = path + '/data/' + self.dataF
@@ -73,7 +75,10 @@ class Topological_NN(object):
         #tf.add_to_collection("activation", self.y_hat_softmax)
 
         self.cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.y, logits=self.yhat))
-        #self.cost = tf.reduce_sum(tf.abs(self.y - self.y_hat_softmax))
+        
+        reg_term = tf.contrib.layers.apply_regularization(self.regularizer, [self.w_1, self.w_2, self.w_3])
+        self.cost += reg_term
+
         self.predictition = tf.argmax(tf.nn.softmax(self.yhat),1)
         tf.add_to_collection("activation", self.predictition)
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.y,1), self.predictition), 'float'))
