@@ -8,7 +8,7 @@ path = os.getcwd()
 
 # accuarcy plot, should be linear
 fileN = 'Esymdep.out'
-hiddenN = 1000
-step = 3e-1
+hiddenN = 100
+step = 1e-2
 metaFile = path + '/MetaGraphs/Topological_jump__Hnodes_{:.0f}_Ssize_{:.0e}'.format(hiddenN, step)
 accuarcy_plot(fileN, metaFile)

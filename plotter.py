@@ -53,12 +53,14 @@ def accuarcy_plot(fileN, metaF):
     
     NNet = ImportGraph(metaF, fileN)
     
-    predict = NNet.run_yhat([inputs])
-    plt.plot(outputs[i], inputs, 'bo', alpha=0.1, ms=2)
+    predict = NNet.run_yhat(inputs)
+    plt.plot(np.abs(outputs), predict, 'bo', alpha=0.1, ms=2)
     
     xvals = np.linspace(-10, 10, 10)
     plt.plot(xvals, xvals, 'r', lw=1)
     
+    plt.ylim([-3, 10])
+    plt.xlim([-3, 10])
     fig.set_tight_layout(True)
     pl.savefig(figname)
 

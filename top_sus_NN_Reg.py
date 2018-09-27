@@ -70,9 +70,10 @@ class Topological_NN(object):
         self.w_2 = self.init_weights((self.h_nodes, self.h_nodes))
         self.w_3 = self.init_weights((self.h_nodes, self.y_size))
 
-        self.yhat = tf.round(self.forwardprop(self.X, self.w_1, self.w_2, self.w_3)) # Note forcing integer...
+        self.yhat = self.forwardprop(self.X, self.w_1, self.w_2, self.w_3)
+        # Note can force integer here with tf.round... but I dont think we should.
 
-        self.cost = tf.reduce_sum(tf.square(self.y - self.yhat)) # Consider alternate cost func
+        self.cost = tf.reduce_sum(tf.square(self.y - self.yhat)) # Could consider alternate cost func
         
         reg_term = tf.contrib.layers.apply_regularization(self.regularizer, [self.w_1, self.w_2, self.w_3])
         self.cost += reg_term
@@ -99,7 +100,7 @@ class Topological_NN(object):
                     sess.run(self.updates, feed_dict={self.X: self.train_X[start:end],
                                                       self.y: self.train_y[start:end]})
 
-                if i % 100 == 0:
+                if i % 10 == 0:
                     train_accuracy = sess.run(self.cost, feed_dict={self.X: self.train_X, self.y: self.train_y})
                     test_accuracy = sess.run(self.cost, feed_dict={self.X: self.test_X, self.y: self.test_y})
                     print("Epoch = %d, train accuracy = %.7e, test accuracy = %.7e"
