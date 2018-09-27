@@ -50,7 +50,7 @@ class Topological_NN(object):
         np.random.shuffle(full_dat)
         
         input_v = full_dat[:, :self.input_features]
-        output_v = np.asarray([([1,0] if x == 0 else [0,1]) for x in full_dat[:, self.input_features]])
+        output_v = np.abs(full_dat[:, self.input_features:])
         
         std_input_v = self.scalar.fit_transform(input_v)
         self.train_size = int((1.-frac_test)*len(input_v))
@@ -70,18 +70,15 @@ class Topological_NN(object):
         self.w_2 = self.init_weights((self.h_nodes, self.h_nodes))
         self.w_3 = self.init_weights((self.h_nodes, self.y_size))
 
-        self.yhat = self.forwardprop(self.X, self.w_1, self.w_2, self.w_3)
-        #self.y_hat_softmax = tf.nn.softmax(self.yhat)
-        #tf.add_to_collection("activation", self.y_hat_softmax)
+        self.yhat = tf.round(self.forwardprop(self.X, self.w_1, self.w_2, self.w_3)) # Note forcing integer...
 
-        self.cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.y, logits=self.yhat))
+        self.cost = tf.reduce_sum(tf.square(self.y - self.yhat)) # Consider alternate cost func
         
         reg_term = tf.contrib.layers.apply_regularization(self.regularizer, [self.w_1, self.w_2, self.w_3])
         self.cost += reg_term
 
-        self.predictition = tf.argmax(tf.nn.softmax(self.yhat),1)
-        tf.add_to_collection("activation", self.predictition)
-        self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.y,1), self.predictition), 'float'))
+        tf.add_to_collection("activation", self.yhat)
+        #self.accuracy = tf.reduce_sum(tf.square(self.y - self.yhat))
 
         self.updates = tf.train.GradientDescentOptimizer(self.step_s).minimize(self.cost)
         self.saveNN = tf.train.Saver()
@@ -103,10 +100,10 @@ class Topological_NN(object):
                                                       self.y: self.train_y[start:end]})
 
                 if i % 100 == 0:
-                    train_accuracy = sess.run(self.accuracy, feed_dict={self.X: self.train_X, self.y: self.train_y})
-                    test_accuracy = sess.run(self.accuracy, feed_dict={self.X: self.test_X, self.y: self.test_y})
+                    train_accuracy = sess.run(self.cost, feed_dict={self.X: self.train_X, self.y: self.train_y})
+                    test_accuracy = sess.run(self.cost, feed_dict={self.X: self.test_X, self.y: self.test_y})
                     print("Epoch = %d, train accuracy = %.7e, test accuracy = %.7e"
-                          % (i + 1, train_accuracy, test_accuracy))
+                          % (i + 1, train_accuracy / len(self.train_X), test_accuracy / len(self.test_X)))
                           
             self.saveNN.save(sess, self.fileN)
         return
@@ -117,13 +114,13 @@ class ImportGraph():
         self.graph = tf.Graph()
         self.sess = tf.Session(graph=self.graph)
         with self.graph.as_default():
-            saver = tf.train.import_meta_graph(loc + '.meta')
+            saver = tf.train.import_meta_graph(metaFile + '.meta')
             saver.restore(self.sess, metaFile)
             self.activation = tf.get_collection('activation')[0]
 
         self.scalar = StandardScaler()
 
-        dataIN = np.loadtxt(path + '/data/' + dataF)
+        dataIN = np.loadtxt(path + '/data/' + dataFile)
         input_v = dataIN[:, :-1]
         std_input_v = self.scalar.fit_transform(input_v)
         return
@@ -131,3 +128,4 @@ class ImportGraph():
     def run_yhat(self, data):
         inputV = np.insert(self.scalar.transform(data), 0, 1., axis=1)
         return self.sess.run(self.activation, feed_dict={"X:0": inputV})
+
