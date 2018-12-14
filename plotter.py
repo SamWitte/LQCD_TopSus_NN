@@ -52,7 +52,6 @@ def accuarcy_plot(fileN, metaF):
     outputs = dataL[:, -1]
     
     NNet = ImportGraph(metaF, fileN)
-    
     predict = NNet.run_yhat(inputs)
     plt.plot(np.abs(outputs), predict, 'bo', alpha=0.1, ms=2)
     

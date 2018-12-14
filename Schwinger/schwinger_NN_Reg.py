@@ -19,10 +19,14 @@ class Topological_NN(object):
         self.step_s = step_s
         self.dataF = dataF
         
-        self.regularizer = tf.contrib.layers.l2_regularizer(scale=reg_scale)
+        if reg_scale > 1e-10:
+            self.regularizer = tf.contrib.layers.l2_regularizer(scale=reg_scale)
+            self.regularize = True
+        else:
+            self.regularize = False
 
         self.dir_name = path + '/MetaGraphs/'
-        self.fileN = self.dir_name + 'Topological_jump__Hnodes_{:.0f}_Ssize_{:.0e}'.format(h_nodes, step_s)
+        self.fileN = self.dir_name + 'Schwinger_' + self.dataF + '_Hnodes_{:.0f}_Ssize_{:.0e}'.format(h_nodes, step_s)
 
         if not os.path.exists(self.dir_name):
             os.mkdir(self.dir_name)
@@ -32,7 +36,7 @@ class Topological_NN(object):
         self.y_size = self.train_y.shape[1]
         
     def init_weights(self, shape):
-        weights = tf.random_normal(shape, stddev=0.2)
+        weights = tf.random_normal(shape, stddev=self.std_dev_init) # 0.2 works well for topQ
         return tf.Variable(weights)
 
     def forwardprop(self, X, w_1, w_2, w_3):
@@ -41,25 +45,50 @@ class Topological_NN(object):
         yhat = tf.matmul(hid2, w_3)
         return yhat
 
-    def get_data(self, frac_test=0.3):
+    def get_data(self, frac_test=0.5):
+        print 'Loading Data Files....'
         self.scalar = StandardScaler()
         
-        data_file = path + '/data/' + self.dataF
-        full_dat = np.loadtxt(data_file)
-        self.input_features = full_dat.shape[1] - 1
+        input_data_file = path + '/NN_data/Schwinger_' + self.dataF + '_input_data.dat'
+        output_data_file = path + '/NN_data/Schwinger_' + self.dataF + '_output_data.dat'
+        
+        input_data = np.loadtxt(input_data_file)
+        output_data = np.loadtxt(output_data_file)
+        
+        lattice_dim = 18
+
+        if self.dataF == 'fermion_determinant':
+            output_features = 1
+            self.round_acc = False
+            self.std_dev_init = 200.
+        elif self.dataF == 'top_charge':
+            output_features = 1
+            self.round_acc = True
+            self.std_dev_init = 0.05
+        elif self.dataF == 'pion_correlator':
+            output_features = lattice_dim
+            self.round_acc = False
+        
+        self.input_features = len(input_data) / len(output_data)
+        
+        input_data = input_data.reshape(len(output_data), self.input_features)
+        full_dat = np.column_stack((input_data, output_data))
         
         np.random.shuffle(full_dat)
         
         input_v = full_dat[:, :self.input_features]
-        output_v = np.abs(full_dat[:, self.input_features:])
+        output_v = full_dat[:, self.input_features:]
         
         std_input_v = self.scalar.fit_transform(input_v)
+        
+     
         self.train_size = int((1.-frac_test)*len(input_v))
         self.test_size = int(frac_test*len(input_v))
         
         N, M  = input_v.shape
         all_X = np.ones((N, M + 1))
         all_X[:, 1:] = std_input_v
+        print 'Finished Preparing Data Files....'
         return train_test_split(all_X, output_v, test_size=frac_test, random_state=RANDOM_SEED)
 
     def make_nn(self):
@@ -72,13 +101,19 @@ class Topological_NN(object):
         self.w_3 = self.init_weights((self.h_nodes, self.y_size))
 
         self.yhat = self.forwardprop(self.X, self.w_1, self.w_2, self.w_3)
-        # Note can force integer here with tf.round... but I dont think we should.
 
         self.cost = tf.reduce_sum(tf.square(self.y - self.yhat)) # Could consider alternate cost func
         
-        reg_term = tf.contrib.layers.apply_regularization(self.regularizer, [self.w_1, self.w_2, self.w_3])
-        self.cost += reg_term
-
+        if self.regularize:
+            reg_term = tf.contrib.layers.apply_regularization(self.regularizer, [self.w_1, self.w_2, self.w_3])
+            self.cost += reg_term
+        
+        if self.round_acc:
+            self.accur = tf.reduce_sum(tf.cast(tf.equal(self.y, tf.round(self.yhat)), tf.float32))
+        else:
+            # TEST
+            self.accur = tf.reduce_sum(tf.abs(self.y - self.yhat))
+        
         tf.add_to_collection("activation", self.yhat)
         #self.accuracy = tf.reduce_sum(tf.square(self.y - self.yhat))
 
@@ -101,11 +136,11 @@ class Topological_NN(object):
                     sess.run(self.updates, feed_dict={self.X: self.train_X[start:end],
                                                       self.y: self.train_y[start:end]})
 
-                if i % 10 == 0:
-                    train_accuracy = sess.run(self.cost, feed_dict={self.X: self.train_X, self.y: self.train_y})
-                    test_accuracy = sess.run(self.cost, feed_dict={self.X: self.test_X, self.y: self.test_y})
+                if i % int(self.epochs / 10.) == 0:
+                    train_accuracy = sess.run(self.accur, feed_dict={self.X: self.train_X, self.y: self.train_y})
+                    test_accuracy = sess.run(self.accur, feed_dict={self.X: self.test_X, self.y: self.test_y})
                     print("Epoch = %d, train accuracy = %.7e, test accuracy = %.7e"
-                          % (i + 1, train_accuracy / len(self.train_X), test_accuracy / len(self.test_X)))
+                          % (i + 1, float(train_accuracy) / len(self.train_X), float(test_accuracy) / len(self.test_X)))
                           
             self.saveNN.save(sess, self.fileN)
         return
@@ -121,12 +156,34 @@ class ImportGraph():
             self.activation = tf.get_collection('activation')[0]
 
         self.scalar = StandardScaler()
-        dataIN = np.loadtxt(path + '/data/' + dataFile)
-        input_v = dataIN[:, :-1]
+        
+        input_data_file = path + '/NN_data/Schwinger_' + dataFile + '_input_data.dat'
+        output_data_file = path + '/NN_data/Schwinger_' + dataFile + '_output_data.dat'
+        input_data = np.loadtxt(input_data_file)
+        output_data = np.loadtxt(output_data_file)
+        
+        lattice_dim = 18
+
+        if dataFile == 'fermion_determinant':
+            output_features = 1
+        elif dataFile == 'top_charge':
+            output_features = 1
+        elif dataFile == 'pion_correlator':
+            output_features = lattice_dim
+        
+        input_features = len(input_data) / len(output_data)
+        
+        
+        input_data = input_data.reshape(len(output_data), input_features)
+        full_dat = np.column_stack((input_data, output_data))
+        
+        input_v = full_dat[:, :input_features]
         std_input_v = self.scalar.fit_transform(input_v)
         return
     
-    def run_yhat(self, data):
+    def run_yhat(self, data, round=False):
         inputV = np.insert(self.scalar.transform(data), 0, 1., axis=1)
-        return self.sess.run(self.activation, feed_dict={"X:0": inputV})
+        val = self.sess.run(self.activation, feed_dict={"X:0": inputV})
+        
+        return val
 
