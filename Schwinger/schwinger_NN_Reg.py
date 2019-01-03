@@ -39,10 +39,11 @@ class Topological_NN(object):
         weights = tf.random_normal(shape, stddev=self.std_dev_init) # 0.2 works well for topQ
         return tf.Variable(weights)
 
-    def forwardprop(self, X, w_1, w_2, w_3):
+    def forwardprop(self, X, w_1, w_2, w_3, w_4):
         hid1 = tf.nn.sigmoid(tf.matmul(X, w_1))
         hid2 = tf.nn.sigmoid(tf.matmul(hid1, w_2))
-        yhat = tf.matmul(hid2, w_3)
+        hid3 = tf.nn.sigmoid(tf.matmul(hid2, w_3))
+        yhat = tf.matmul(hid3, w_4)
         return yhat
 
     def get_data(self, frac_test=0.5):
@@ -68,6 +69,7 @@ class Topological_NN(object):
         elif self.dataF == 'pion_correlator':
             output_features = lattice_dim
             self.round_acc = False
+            self.std_dev_init = 0.05
         
         self.input_features = len(input_data) / len(output_data)
         
@@ -80,7 +82,6 @@ class Topological_NN(object):
         output_v = full_dat[:, self.input_features:]
         
         std_input_v = self.scalar.fit_transform(input_v)
-        
      
         self.train_size = int((1.-frac_test)*len(input_v))
         self.test_size = int(frac_test*len(input_v))
@@ -98,11 +99,13 @@ class Topological_NN(object):
         
         self.w_1 = self.init_weights((self.x_size, self.h_nodes))
         self.w_2 = self.init_weights((self.h_nodes, self.h_nodes))
-        self.w_3 = self.init_weights((self.h_nodes, self.y_size))
+        self.w_3 = self.init_weights((self.h_nodes, self.h_nodes))
+        self.w_4 = self.init_weights((self.h_nodes, self.y_size))
 
-        self.yhat = self.forwardprop(self.X, self.w_1, self.w_2, self.w_3)
+        self.yhat = self.forwardprop(self.X, self.w_1, self.w_2, self.w_3, self.w_4)
 
         self.cost = tf.reduce_sum(tf.square(self.y - self.yhat)) # Could consider alternate cost func
+        
         
         if self.regularize:
             reg_term = tf.contrib.layers.apply_regularization(self.regularizer, [self.w_1, self.w_2, self.w_3])

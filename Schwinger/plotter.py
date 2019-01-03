@@ -69,6 +69,8 @@ def accuarcy_plot(fileN, metaF):
         yshift = 2.
     elif fileN == 'pion_correlator':
         output_features = lattice_dim
+        round = False
+        yshift = 2.
     
     input_features = len(input_data) / len(output_data)
     input_data = input_data.reshape(len(output_data), input_features)
