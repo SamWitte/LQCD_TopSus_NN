@@ -63,14 +63,17 @@ def accuarcy_plot(fileN, metaF):
         output_features = 1
         round = False
         yshift = 100.
+        alph = 0.15
     elif fileN == 'top_charge':
         output_features = 1
         round = True
         yshift = 2.
+        alph = 0.15
     elif fileN == 'pion_correlator':
         output_features = lattice_dim
         round = False
         yshift = 2.
+        alph = 0.02
     
     input_features = len(input_data) / len(output_data)
     input_data = input_data.reshape(len(output_data), input_features)
@@ -84,7 +87,7 @@ def accuarcy_plot(fileN, metaF):
     if round:
         highV = xvals + 0.5
         lowV = xvals - 0.5
-        plt.fill_between(xvals, lowV, highV, color='r', alpha=0.2)
+        plt.fill_between(xvals, lowV, highV, color='r', alpha=alph)
 
     plt.ylim([minVal - yshift, maxVal + yshift])
     plt.xlim([minVal - 0.1, maxVal  + 0.1])
